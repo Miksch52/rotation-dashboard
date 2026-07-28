@@ -1,0 +1,8 @@
+# Generierte Ausgabe - nicht versionieren (kompletter Ordner)
+data/
+
+# Python/macOS/Editor
+__pycache__/
+*.pyc
+.DS_Store
+.claude/

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Rotation-Dashboard</title>
+<style>
+:root{--bg:#0c0e12;--card:#161a22;--line:#262c38;--tx:#e6e9ef;--mut:#8b93a3;
+--grn:#36d399;--red:#f87272;--amb:#fbbd23;--blu:#60a5fa;--acc:#7c5cff;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro",Segoe UI,Roboto,sans-serif;padding:20px;max-width:1180px;margin:0 auto}
+h1{font-size:20px;font-weight:650;letter-spacing:-.2px}
+h2{font-size:14px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin:26px 0 10px}
+.top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:38px}
+.meta{color:var(--mut);font-size:12px}
+.btn{background:var(--card);border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;text-decoration:none;display:inline-flex;align-items:center}
+.btn:hover{border-color:var(--acc)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.regime{background:linear-gradient(135deg,#1a1f2b,#13161d);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:16px}
+.regime .lead{font-size:18px;font-weight:650;margin-bottom:4px}
+.regime .note{color:var(--mut)}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.pill{background:#0e1117;border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--mut)}
+.pill b{color:var(--tx)}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{padding:9px 11px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);cursor:pointer;text-align:right}
+th:first-child,td:first-child{text-align:left}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1b212c}
+.sym{font-weight:650}
+.theme{color:var(--mut);font-size:12px}
+.pos{color:var(--grn)}.neg{color:var(--red)}
+.bar{display:inline-block;height:6px;border-radius:3px;background:var(--acc);vertical-align:middle}
+.rs{font-weight:650}
+.tag{font-size:11px;padding:1px 7px;border-radius:6px;border:1px solid var(--line);color:var(--mut)}
+.tag.hot{color:var(--grn);border-color:#1f5a44}
+.foot{color:var(--mut);font-size:11px;margin-top:30px;border-top:1px solid var(--line);padding-top:14px}
+.warn{background:#241a0a;border:1px solid #5a431f;color:var(--amb);border-radius:10px;padding:12px;margin-top:14px;font-size:13px}
+</style>
+</head>
+<body>
+<a href="../index.html" id="mts-home-btn" title="Zur Startseite" aria-label="Zur Startseite" style="position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(env(safe-area-inset-left,0px) + 8px);z-index:2147483000;display:inline-flex;align-items:center;gap:5px;padding:7px 11px;border-radius:10px;background:rgba(18,26,38,.85);color:#e2e8f0;text-decoration:none;font:600 13px/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);box-shadow:0 3px 12px rgba(0,0,0,.35)">🏠 Start</a>
+
+<div class="top">
+  <div><h1 id="title">Rotation-Dashboard</h1><div class="meta" id="sub"></div></div>
+  <div class="actions">
+    <a class="btn" href="../Signal-Hub/signal-hub.html">📈 Signal-Hub</a>
+    <button class="btn" id="cloudbtn" onclick="triggerCloudWorkflow('Miksch52','signal-hub','pipeline.yml',this,'Signal-Hub + Rotation-Dashboard-Update')">☁️ Cloud-Scan starten</button>
+    <button class="btn" id="lang" onclick="toggleLang()">EN</button>
+  </div>
+</div>
+
+<div id="pmwarn" class="warn" style="display:none"></div>
+<div id="regime"></div>
+<div id="content"></div>
+
+<div class="foot" id="foot"></div>
+
+<!-- file://-Fallback (kein HTTP-Server -> fetch() scheitert an CORS): setzt
+     window.ROTATION_DATA, falls die Datei existiert. Fehlt sie (noch kein
+     Lauf), einfach ignorieren - kein Fehler, siehe pfade.py-Kommentar. -->
+<script src="data/rotation.js" onerror="void 0"></script>
+<script>
+/* Wird vom Sektor-Rotation-Pipeline-Lauf geschrieben (Rotation-Dashboard/src/run.py):
+   RS je Themen-ETF ist ein echtes IBD-aehnliches Relative-Strength-Rating
+   (gewichtete 3/6/9/12-Monats-Outperformance ggue. ^GSPC, Perzentil-Rang
+   1..99 innerhalb der Themen-ETFs) - dieselbe Formel, die Markets 360/der
+   Trend-Screener fuer Einzelaktien nutzen. Leader-Aktien und deren RS
+   stammen unveraendert aus dem Markets-360-Export (keine doppelte
+   Berechnung), nur r1m/r3m/Volumen/Rote-Tage-Resilienz sind fuer diese
+   kleine Teilmenge frisch geholt. */
+let DATA = (typeof ROTATION_DATA !== "undefined") ? ROTATION_DATA : null;
+let LANG = "de";
+const T = {
+  de:{title:"Rotation-Dashboard",sectors:"Staerkste Sektoren / Themen (IBD-RS)",
+      leaders:"Leader in den staerksten Themen",resil:"Rote-Tage-Resilienz",
+      pm:"Vorboerse / Pre-Market Bewegungen",rs:"RS",price:"Kurs",
+      mom:"Mom",chg1m:"1M%",chg3m:"3M%",fromhi:"v.Hoch%",vol:"Vol x",
+      tt:"TT",gap:"Gap%",pmvol:"PM-Vol",relred:"rel. an roten Tagen",
+      green:"gruen/rot",lead:"Leadership",trend:"Trend",breadth:"Breite",
+      pmwarn:"Pre-Market-Daten sind duenn und unzuverlaessig. Gaps faden oft. Als Hinweis, nicht als Signal lesen.",
+      foot:"Watchlist-Generator, kein Kaufsignal. Keine Stops/Position-Sizing/Erwartungswert enthalten. Themen-ETF-RS = echtes IBD-aehnliches Relative-Strength-Rating (gewichtete 3/6/9/12-Monats-Outperformance ggue. ^GSPC, Perzentil-Rang 1-99 unter den Themen-ETFs). Leader-RS/Sektor-Tag stammen aus dem Markets-360-Export.",
+      leerLeader:"Keine Leader-Aktien gefunden - entweder keine Markets-360-Daten verfuegbar, oder kein Titel im Universum passt zu den aktuell staerksten Themen (bei Nischen-ETFs wie Biotech/Cyber/Uran/Regionalbanken normal, siehe Wiki)."},
+  en:{title:"Rotation Dashboard",sectors:"Strongest Sectors / Themes (IBD RS)",
+      leaders:"Leaders inside the strongest themes",resil:"Red-Day Resilience",
+      pm:"Pre-Market Moves",rs:"RS",price:"Price",mom:"Mom",chg1m:"1M%",
+      chg3m:"3M%",fromhi:"fr.Hi%",vol:"Vol x",tt:"TT",gap:"Gap%",pmvol:"PM-Vol",
+      relred:"rel. on red days",green:"green/red",lead:"Leadership",
+      trend:"Trend",breadth:"Breadth",
+      pmwarn:"Pre-market data is thin and unreliable. Gaps fade often. Read as a hint, not a signal.",
+      foot:"Watchlist generator, not a buy signal. No stops/sizing/expectancy. Theme-ETF RS = real IBD-like Relative Strength Rating (weighted 3/6/9/12-month outperformance vs ^GSPC, percentile 1-99 among the theme ETFs). Leader RS/sector tag come from the Markets-360 export.",
+      leerLeader:"No leader stocks found - either no Markets-360 data available, or nothing in the universe maps to the currently strongest themes (normal for niche ETFs like Biotech/Cyber/Uranium/Regional Banks, see wiki)."}
+};
+
+function cls(v){return v>0?"pos":(v<0?"neg":"")}
+function fmt(v,d=1){return (v===null||v===undefined||isNaN(v))?"–":Number(v).toFixed(d)}
+function sgn(v,d=1){if(v===null||v===undefined||isNaN(v))return "–";return (v>0?"+":"")+Number(v).toFixed(d)}
+
+function render(){
+  if(!DATA){
+    document.getElementById("content").innerHTML =
+      '<p class="meta">Noch keine Daten geladen — data/rotation.json fehlt (erster Pipeline-Lauf steht noch aus) oder ist gerade nicht erreichbar.</p>';
+    return;
+  }
+  const t=T[LANG];
+  document.getElementById("lang").textContent = LANG==="de"?"EN":"DE";
+  document.getElementById("title").textContent=t.title;
+  document.getElementById("sub").textContent =
+    (DATA.mode==="premarket"?(LANG==="de"?"Vorboersen-Scan · ":"Pre-market scan · "):
+     (LANG==="de"?"Abend-Scan · ":"Evening scan · "))+DATA.generated+" · "+DATA.universe_size+" Aktien";
+  document.getElementById("foot").textContent=t.foot;
+
+  const r=DATA.regime;
+  let pills=`<span class="pill">${t.trend}: <b>${r.trend}</b></span>`+
+            `<span class="pill">${t.breadth}: <b>${r.breadth}</b></span>`+
+            `<span class="pill">QQQ <b>${sgn(r.qqq_1m)}</b></span>`+
+            `<span class="pill">DIA <b>${sgn(r.dia_1m)}</b></span>`+
+            `<span class="pill">IWM <b>${sgn(r.iwm_1m)}</b></span>`+
+            `<span class="pill">RSP <b>${sgn(r.rsp_1m)}</b></span>`;
+  document.getElementById("regime").innerHTML=
+    `<div class="regime"><div class="lead">${t.lead}: ${r.leader}</div>`+
+    `<div class="note">${r.note}</div><div class="pills">${pills}</div></div>`;
+
+  const pw=document.getElementById("pmwarn");
+  if(DATA.mode==="premarket"){pw.style.display="block";pw.textContent=t.pmwarn;}
+  else pw.style.display="none";
+
+  let html="";
+
+  html+=`<h2>${t.sectors}</h2><table><thead><tr>`+
+    `<th>ETF / Thema</th><th>${t.rs}</th><th>${t.chg1m}</th><th>${t.chg3m}</th>`+
+    `<th>${t.fromhi}</th><th>>50MA</th></tr></thead><tbody>`;
+  DATA.sectors.forEach(s=>{
+    const w=Math.max(2,Math.round((s.rs||0)/100*60));
+    html+=`<tr><td><span class="sym">${s.etf}</span> <span class="theme">${s.theme}</span></td>`+
+      `<td><span class="rs">${s.rs??"–"}</span> <span class="bar" style="width:${w}px"></span></td>`+
+      `<td class="${cls(s.r1m)}">${sgn(s.r1m)}</td>`+
+      `<td class="${cls(s.r3m)}">${sgn(s.r3m)}</td>`+
+      `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td>`+
+      `<td>${s.above_ma50?"✓":"·"}</td></tr>`;
+  });
+  html+=`</tbody></table>`;
+
+  if(DATA.mode!=="premarket"){
+    html+=`<h2>${t.leaders}</h2>`;
+    if(DATA.leaders && DATA.leaders.length){
+      html+=`<table><thead><tr>`+
+        `<th>Symbol</th><th>${t.rs}</th><th>${t.price}</th><th>${t.chg1m}</th>`+
+        `<th>${t.chg3m}</th><th>${t.fromhi}</th><th>${t.vol}</th><th>${t.tt}</th></tr></thead><tbody>`;
+      DATA.leaders.forEach(s=>{
+        const hot=s.near_high?` <span class="tag hot">${LANG==="de"?"nahe Hoch":"near high"}</span>`:"";
+        html+=`<tr><td><span class="sym">${s.ticker}</span> <span class="theme">${s.theme}</span>${hot}</td>`+
+          `<td class="rs">${s.rs??"–"}</td><td>${fmt(s.price,2)}</td>`+
+          `<td class="${cls(s.r1m)}">${sgn(s.r1m)}</td>`+
+          `<td class="${cls(s.r3m)}">${sgn(s.r3m)}</td>`+
+          `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td>`+
+          `<td>${fmt(s.vol_ratio,2)}</td>`+
+          `<td><span class="tag">${s.tt_crit??"–"}/8</span></td></tr>`;
+      });
+      html+=`</tbody></table>`;
+    } else {
+      html+=`<p class="meta">${t.leerLeader}</p>`;
+    }
+
+    if(DATA.resilient && DATA.resilient.length){
+      html+=`<h2>${t.resil}</h2><table><thead><tr>`+
+        `<th>Symbol</th><th>${t.relred}</th><th>${t.green}</th><th>${t.rs}</th><th>${t.fromhi}</th></tr></thead><tbody>`;
+      DATA.resilient.forEach(s=>{
+        html+=`<tr><td><span class="sym">${s.ticker}</span> <span class="theme">${s.theme}</span></td>`+
+          `<td class="${cls(s.rel_on_red)}">${sgn(s.rel_on_red,2)}</td>`+
+          `<td>${s.green_on_red}/${s.n_red}</td>`+
+          `<td class="rs">${s.rs??"–"}</td>`+
+          `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td></tr>`;
+      });
+      html+=`</tbody></table>`;
+    }
+  }
+
+  if(DATA.mode==="premarket" && DATA.premarket && DATA.premarket.length){
+    html+=`<h2>${t.pm}</h2><table><thead><tr>`+
+      `<th>Symbol</th><th>${t.gap}</th><th>${t.price}</th><th>${t.pmvol}</th><th>${t.rs}</th></tr></thead><tbody>`;
+    DATA.premarket.forEach(s=>{
+      html+=`<tr><td><span class="sym">${s.ticker}</span> <span class="theme">${s.theme}</span></td>`+
+        `<td class="${cls(s.gap_pct)}">${sgn(s.gap_pct,2)}</td>`+
+        `<td>${fmt(s.last,2)}</td>`+
+        `<td>${Math.round(s.pm_vol).toLocaleString()}</td>`+
+        `<td class="rs">${s.rs??"–"}</td></tr>`;
+    });
+    html+=`</tbody></table>`;
+  }
+
+  document.getElementById("content").innerHTML=html;
+}
+function toggleLang(){LANG=LANG==="de"?"en":"de";render();}
+
+/* ---- Cloud-Workflow-Trigger (identisch zu Signal-Hub/Price-Action-Hub,
+   1:1 kopiert - Single-File-App-Prinzip). Startet denselben pipeline.yml,
+   der jetzt auch das Rotation-Dashboard mitausfuehrt. ---- */
+const GH_ACTIONS_TOKEN_KEY='gh_actions_token';
+function ghActionsToken(){ return localStorage.getItem(GH_ACTIONS_TOKEN_KEY)||''; }
+function promptGhActionsToken(){
+  const t=prompt('GitHub-Token fuer Cloud-Scans (einmalig pro Geraet)\n\n'
+    +'Fine-grained Personal Access Token mit Berechtigung "Actions: Read and '
+    +'write" auf die drei Repos (signal-hub, minervini-markets-360, '
+    +'lokaler-trend-screener). Erstellen: github.com/settings/personal-access-tokens/new');
+  if(t){ localStorage.setItem(GH_ACTIONS_TOKEN_KEY,t.trim()); return t.trim(); }
+  return null;
+}
+async function triggerCloudWorkflow(owner,repo,workflowFile,btn,label){
+  let token=ghActionsToken();
+  if(!token){ token=promptGhActionsToken(); if(!token) return; }
+  const orig=btn?btn.textContent:null;
+  if(btn){ btn.disabled=true; btn.textContent='⏳ startet…'; }
+  try{
+    const r=await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowFile}/dispatches`,{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
+      body:JSON.stringify({ref:'main'})
+    });
+    if(r.status===204){
+      alert(`${label} gestartet — laeuft in der Cloud (kein Mac mini noetig), dauert je nach Umfang einige Minuten. Ergebnis erscheint automatisch beim naechsten Laden.`);
+    } else if(r.status===401||r.status===403){
+      localStorage.removeItem(GH_ACTIONS_TOKEN_KEY);
+      alert(`Token ungueltig oder ohne Rechte fuer ${owner}/${repo} (Status ${r.status}). Bitte neu einrichten — beim naechsten Klick erneut nach dem Token gefragt.`);
+    } else {
+      const txt=await r.text().catch(()=>'');
+      alert(`Fehler beim Starten (${r.status}): ${txt.slice(0,200)}`);
+    }
+  } catch(e){
+    alert('Netzwerkfehler beim Starten: '+e.message);
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent=orig; }
+  }
+}
+
+/* Laden: JSON per fetch (Live-Server/Pages), .js-Fallback (window.ROTATION_DATA)
+   fuer file:// - identisches Muster wie Signal-Hub/data/signals.js. */
+fetch("data/rotation.json", {cache:"no-store"})
+  .then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(d=>{ DATA=d; render(); })
+  .catch(()=>{ render(); });
+render();
+</script>
+</body>
+</html>
