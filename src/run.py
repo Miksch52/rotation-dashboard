@@ -143,6 +143,11 @@ def main():
 
     # 1) Regime-Referenzen + Benchmark
     regime_ticker = list(etfs.REGIME_TICKER.values())
+    # Praefetch (Performance-Review 2026-08-02): Regime-Ticker, Benchmark UND die
+    # Themen-ETFs (Schritt 2) sind alle schon hier bekannt und unabhaengig
+    # voneinander - zusammen parallel holen statt nacheinander mit Sleep.
+    kursdaten.prefetch_charts_parallel(
+        regime_ticker + [etfs.RS_BENCHMARK] + list(etfs.THEMEN_ETFS), cache, heute)
     closes_by_ticker = {}
     volumes_by_ticker = {}
     for t in regime_ticker + [etfs.RS_BENCHMARK]:
@@ -198,6 +203,7 @@ def main():
     by_symbol = {a["symbol"]: a for a in aktien}
 
     # 5) Eigene Kurse fuer die ausgewaehlte Teilmenge (Leader + Resilienz-Kandidaten)
+    kursdaten.prefetch_charts_parallel(list(resilient_symbole), cache, heute)
     ticker_kurse = {}
     for sym in resilient_symbole:
         c, v = holen(sym)

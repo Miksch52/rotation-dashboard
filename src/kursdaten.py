@@ -11,6 +11,7 @@ keine zusaetzliche Abhaengigkeit braucht (identisches Lastprofil wie die
 beiden Schwester-Apps).
 """
 
+import concurrent.futures
 import json
 import ssl
 import time
@@ -75,14 +76,48 @@ def speichere_cache(cache):
 
 
 def hole_chart_cached(symbol, cache, heute):
-    """Tages-Cache-Wrapper, faengt Netzwerkfehler pro Ticker einzeln ab."""
+    """Tages-Cache-Wrapper, faengt Netzwerkfehler pro Ticker einzeln ab.
+    Performance-Review 2026-08-02: Exceptions werden NICHT gecacht (sonst
+    sperrt ein einmaliger Timeout den Ticker fuer den Rest des Tages,
+    ununterscheidbar von "wirklich keine Daten")."""
     key = f"{symbol}@{heute}"
     if key in cache:
         return cache[key]
     try:
         d = yahoo_chart(symbol)
     except Exception:
-        d = None
+        time.sleep(0.25)
+        return None
     time.sleep(0.25)
     cache[key] = d
     return d
+
+
+def prefetch_charts_parallel(symbols, cache, heute, max_workers=5):
+    """Holt alle noch nicht gecachten Charts parallel statt seriell mit
+    time.sleep() dazwischen (Performance-Review 2026-08-02, analog Signal-Hub/
+    Price-Action-Hub). Schreibt in `cache` im selben Format wie
+    hole_chart_cached() - jeder Aufruf davon im bestehenden Loop wird danach
+    ein reiner Cache-Hit."""
+    fehlend, gesehen = [], set()
+    for symbol in symbols:
+        if not symbol or symbol in gesehen:
+            continue
+        gesehen.add(symbol)
+        if f"{symbol}@{heute}" not in cache:
+            fehlend.append(symbol)
+    if not fehlend:
+        return
+    def _fetch(symbol):
+        try:
+            d = yahoo_chart(symbol)
+            fehler = False
+        except Exception:
+            d, fehler = None, True
+        time.sleep(0.2)
+        return symbol, d, fehler
+    print(f"  Praefetch: {len(fehlend)} neue Charts ({max_workers} parallel) ...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
+        for symbol, d, fehler in ex.map(_fetch, fehlend):
+            if not fehler:
+                cache[f"{symbol}@{heute}"] = d
