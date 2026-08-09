@@ -22,9 +22,16 @@ h2{font-size:14px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);
 .pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .pill{background:#0e1117;border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--mut)}
 .pill b{color:var(--tx)}
-table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+/* overflow-x:auto auf einem eigenen Wrapper statt direkt auf table - sonst
+   zwingt eine zu breite Tabelle (viele Spalten + white-space:nowrap) mobile
+   Browser dazu, den ganzen Layout-Viewport zu vergroessern (Seite zoomt
+   raus) statt nur die Tabelle seitlich scrollen zu lassen. Gefunden beim
+   Geraeteunabhaengigkeits-Check 2026-08-09: Layout-Viewport 651px auf einem
+   375px-iPhone-Screen ohne diesen Wrapper. */
+.twrap{overflow-x:auto;border-radius:12px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px}
 th,td{padding:9px 11px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
-th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);cursor:pointer;text-align:right}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);text-align:right}
 th:first-child,td:first-child{text-align:left}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#1b212c}
@@ -155,7 +162,7 @@ function render(){
 
   let html="";
 
-  html+=`<h2>${t.sectors}</h2><table><thead><tr>`+
+  html+=`<h2>${t.sectors}</h2><div class="twrap"><table><thead><tr>`+
     `<th>ETF / Thema</th><th>${t.rs}</th><th>${t.chg1m}</th><th>${t.chg3m}</th>`+
     `<th>${t.fromhi}</th><th>>50MA</th></tr></thead><tbody>`;
   DATA.sectors.forEach(s=>{
@@ -167,12 +174,12 @@ function render(){
       `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td>`+
       `<td>${s.above_ma50?"✓":"·"}</td></tr>`;
   });
-  html+=`</tbody></table>`;
+  html+=`</tbody></table></div>`;
 
   if(DATA.mode!=="premarket"){
     html+=`<h2>${t.leaders}</h2>`;
     if(DATA.leaders && DATA.leaders.length){
-      html+=`<table><thead><tr>`+
+      html+=`<div class="twrap"><table><thead><tr>`+
         `<th>Symbol</th><th>${t.rs}</th><th>${t.price}</th><th>${t.chg1m}</th>`+
         `<th>${t.chg3m}</th><th>${t.fromhi}</th><th>${t.vol}</th><th>${t.tt}</th></tr></thead><tbody>`;
       DATA.leaders.forEach(s=>{
@@ -185,13 +192,13 @@ function render(){
           `<td>${fmt(s.vol_ratio,2)}</td>`+
           `<td><span class="tag">${s.tt_crit??"–"}/8</span></td></tr>`;
       });
-      html+=`</tbody></table>`;
+      html+=`</tbody></table></div>`;
     } else {
       html+=`<p class="meta">${t.leerLeader}</p>`;
     }
 
     if(DATA.resilient && DATA.resilient.length){
-      html+=`<h2>${t.resil}</h2><table><thead><tr>`+
+      html+=`<h2>${t.resil}</h2><div class="twrap"><table><thead><tr>`+
         `<th>Symbol</th><th>${t.relred}</th><th>${t.green}</th><th>${t.rs}</th><th>${t.fromhi}</th></tr></thead><tbody>`;
       DATA.resilient.forEach(s=>{
         html+=`<tr><td>${tvLink(s.ticker, s.theme)}</td>`+
@@ -200,12 +207,12 @@ function render(){
           `<td class="rs">${s.rs??"–"}</td>`+
           `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td></tr>`;
       });
-      html+=`</tbody></table>`;
+      html+=`</tbody></table></div>`;
     }
   }
 
   if(DATA.mode==="premarket" && DATA.premarket && DATA.premarket.length){
-    html+=`<h2>${t.pm}</h2><table><thead><tr>`+
+    html+=`<h2>${t.pm}</h2><div class="twrap"><table><thead><tr>`+
       `<th>Symbol</th><th>${t.gap}</th><th>${t.price}</th><th>${t.pmvol}</th><th>${t.rs}</th></tr></thead><tbody>`;
     DATA.premarket.forEach(s=>{
       html+=`<tr><td>${tvLink(s.ticker, s.theme)}</td>`+
@@ -214,7 +221,7 @@ function render(){
         `<td>${Math.round(s.pm_vol).toLocaleString()}</td>`+
         `<td class="rs">${s.rs??"–"}</td></tr>`;
     });
-    html+=`</tbody></table>`;
+    html+=`</tbody></table></div>`;
   }
 
   document.getElementById("content").innerHTML=html;
