@@ -29,6 +29,8 @@ th:first-child,td:first-child{text-align:left}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#1b212c}
 .sym{font-weight:650}
+a.sym{color:inherit;text-decoration:none;border-bottom:1px dotted var(--mut)}
+a.sym:hover{color:var(--acc);border-bottom-color:var(--acc)}
 .theme{color:var(--mut);font-size:12px}
 .pos{color:var(--grn)}.neg{color:var(--red)}
 .bar{display:inline-block;height:6px;border-radius:3px;background:var(--acc);vertical-align:middle}
@@ -46,6 +48,7 @@ tr:hover td{background:#1b212c}
   <div><h1 id="title">Rotation-Dashboard</h1><div class="meta" id="sub"></div></div>
   <div class="actions">
     <a class="btn" href="../Signal-Hub/signal-hub.html">📈 Signal-Hub</a>
+    <a class="btn" href="https://claude.ai/code/artifact/96e3caea-0cf8-4fbc-9be7-9580894c8794" target="_blank" rel="noopener" title="Betriebsanleitung: Marktregime, Themen-RS, Tabellen, Datenherkunft">📖 Anleitung</a>
     <button class="btn" id="cloudbtn" onclick="triggerCloudWorkflow('Miksch52','signal-hub','pipeline.yml',this,'Signal-Hub + Rotation-Dashboard-Update')">☁️ Cloud-Scan starten</button>
     <button class="btn" id="lang" onclick="toggleLang()">EN</button>
   </div>
@@ -93,6 +96,30 @@ const T = {
       leerLeader:"No leader stocks found - either no Markets-360 data available, or nothing in the universe maps to the currently strongest themes (normal for niche ETFs like Biotech/Cyber/Uranium/Regional Banks, see wiki)."}
 };
 
+/* TradingView-Verlinkung (seit 2026-08-09, 1:1 Port aus Signal-Hub/setup-
+   detail.html::tvSymbol/YAHOO_SUFFIX_TV_EXCHANGE - Single-File-App-Prinzip,
+   bewusst dupliziert statt importiert). Yahoo haengt bei Nicht-US-Boersen
+   ein Laender-/Boersen-Kuerzel an (TTE.PA, SHEL.L ...) - TradingView kennt
+   dieses Suffix nicht; die Exchange-Codes sind dort einzeln ueber
+   TradingView-Symbolseiten verifiziert, nicht geraten (siehe CLAUDE.md).
+   Unbekannte/neue Suffixe: nur abschneiden, TradingViews Autosuche
+   uebernimmt (Best-Effort statt gar kein Chart). */
+const YAHOO_SUFFIX_TV_EXCHANGE = {
+  DE:'XETR', F:'XETR', MU:'XETR', PA:'EURONEXT', AS:'EURONEXT',
+  L:'LSE', SW:'SIX', MI:'MIL', ST:'OMXSTO', OL:'OSL', CO:'OMXCOP',
+};
+function tvSymbol(ticker){
+  const m = ticker.match(/^(.+)\.([A-Za-z]{1,4})$/);
+  if(!m) return ticker;
+  const [, basis, suf] = m;
+  const exch = YAHOO_SUFFIX_TV_EXCHANGE[suf.toUpperCase()];
+  return exch ? `${exch}:${basis}` : basis;
+}
+function tvLink(ticker, theme){
+  const href = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol(ticker))}`;
+  return `<a class="sym" href="${href}" target="_blank" rel="noopener" title="Chart auf TradingView oeffnen">${ticker}</a>${theme?` <span class="theme">${theme}</span>`:""}`;
+}
+
 function cls(v){return v>0?"pos":(v<0?"neg":"")}
 function fmt(v,d=1){return (v===null||v===undefined||isNaN(v))?"–":Number(v).toFixed(d)}
 function sgn(v,d=1){if(v===null||v===undefined||isNaN(v))return "–";return (v>0?"+":"")+Number(v).toFixed(d)}
@@ -133,7 +160,7 @@ function render(){
     `<th>${t.fromhi}</th><th>>50MA</th></tr></thead><tbody>`;
   DATA.sectors.forEach(s=>{
     const w=Math.max(2,Math.round((s.rs||0)/100*60));
-    html+=`<tr><td><span class="sym">${s.etf}</span> <span class="theme">${s.theme}</span></td>`+
+    html+=`<tr><td>${tvLink(s.etf, s.theme)}</td>`+
       `<td><span class="rs">${s.rs??"–"}</span> <span class="bar" style="width:${w}px"></span></td>`+
       `<td class="${cls(s.r1m)}">${sgn(s.r1m)}</td>`+
       `<td class="${cls(s.r3m)}">${sgn(s.r3m)}</td>`+
@@ -150,7 +177,7 @@ function render(){
         `<th>${t.chg3m}</th><th>${t.fromhi}</th><th>${t.vol}</th><th>${t.tt}</th></tr></thead><tbody>`;
       DATA.leaders.forEach(s=>{
         const hot=s.near_high?` <span class="tag hot">${LANG==="de"?"nahe Hoch":"near high"}</span>`:"";
-        html+=`<tr><td><span class="sym">${s.ticker}</span> <span class="theme">${s.theme}</span>${hot}</td>`+
+        html+=`<tr><td>${tvLink(s.ticker, s.theme)}${hot}</td>`+
           `<td class="rs">${s.rs??"–"}</td><td>${fmt(s.price,2)}</td>`+
           `<td class="${cls(s.r1m)}">${sgn(s.r1m)}</td>`+
           `<td class="${cls(s.r3m)}">${sgn(s.r3m)}</td>`+
@@ -167,7 +194,7 @@ function render(){
       html+=`<h2>${t.resil}</h2><table><thead><tr>`+
         `<th>Symbol</th><th>${t.relred}</th><th>${t.green}</th><th>${t.rs}</th><th>${t.fromhi}</th></tr></thead><tbody>`;
       DATA.resilient.forEach(s=>{
-        html+=`<tr><td><span class="sym">${s.ticker}</span> <span class="theme">${s.theme}</span></td>`+
+        html+=`<tr><td>${tvLink(s.ticker, s.theme)}</td>`+
           `<td class="${cls(s.rel_on_red)}">${sgn(s.rel_on_red,2)}</td>`+
           `<td>${s.green_on_red}/${s.n_red}</td>`+
           `<td class="rs">${s.rs??"–"}</td>`+
@@ -181,7 +208,7 @@ function render(){
     html+=`<h2>${t.pm}</h2><table><thead><tr>`+
       `<th>Symbol</th><th>${t.gap}</th><th>${t.price}</th><th>${t.pmvol}</th><th>${t.rs}</th></tr></thead><tbody>`;
     DATA.premarket.forEach(s=>{
-      html+=`<tr><td><span class="sym">${s.ticker}</span> <span class="theme">${s.theme}</span></td>`+
+      html+=`<tr><td>${tvLink(s.ticker, s.theme)}</td>`+
         `<td class="${cls(s.gap_pct)}">${sgn(s.gap_pct,2)}</td>`+
         `<td>${fmt(s.last,2)}</td>`+
         `<td>${Math.round(s.pm_vol).toLocaleString()}</td>`+
