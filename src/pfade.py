@@ -31,6 +31,8 @@ os.makedirs(DATA, exist_ok=True)
 
 ROTATION_JSON = os.path.join(DATA, "rotation.json")
 ROTATION_JS = os.path.join(DATA, "rotation.js")
+ROTATION_BACKTEST = os.path.join(DATA, "rotation_backtest.json")  # Forward-Test der drei Setup-Kategorien
+ROTATION_BACKTEST_JS = os.path.join(DATA, "rotation_backtest.js")  # file://-Fallback
 
 # Cloud-Lauf: von Signal-Hubs eigenem rclone-Schritt VOR diesem Schritt schon
 # nach Signal-Hub/_magazine/ gezogen (working-directory: Signal-Hub dort).
@@ -53,3 +55,9 @@ LOKAL_TRENDSCREENER = os.path.expanduser(
 LOKAL = os.path.expanduser("~/Library/Application Support/RotationDashboard")
 os.makedirs(LOKAL, exist_ok=True)
 YAHOO_CACHE = os.path.join(LOKAL, "yahoo_cache.json")
+# Forward-Log der drei Setup-Kategorien (top_rs_etf/leader/resilient) - Basis
+# fuer rotation_backtest.py. Wie bei Price-Action-Hub (hebel_logbuch.json)
+# gibt es hier KEINEN lokalen Mac-mini-Dauerlauf, der als Ausweichquelle
+# einspringen koennte - R2-Sicherung (in Signal-Hubs pipeline.yml) ist von
+# Anfang an die einzige Persistenz.
+ROTATION_LOGBUCH = os.path.join(LOKAL, "rotation_logbuch.json")

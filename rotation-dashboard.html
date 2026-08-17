@@ -64,6 +64,7 @@ a.sym:hover{color:var(--acc);border-bottom-color:var(--acc)}
 <div id="pmwarn" class="warn" style="display:none"></div>
 <div id="regime"></div>
 <div id="content"></div>
+<div id="backtest"></div>
 
 <div class="foot" id="foot"></div>
 
@@ -71,6 +72,7 @@ a.sym:hover{color:var(--acc);border-bottom-color:var(--acc)}
      window.ROTATION_DATA, falls die Datei existiert. Fehlt sie (noch kein
      Lauf), einfach ignorieren - kein Fehler, siehe pfade.py-Kommentar. -->
 <script src="data/rotation.js" onerror="void 0"></script>
+<script src="data/rotation_backtest.js" onerror="void 0"></script>
 <script>
 /* Wird vom Sektor-Rotation-Pipeline-Lauf geschrieben (Rotation-Dashboard/src/run.py):
    RS je Themen-ETF ist ein echtes IBD-aehnliches Relative-Strength-Rating
@@ -91,7 +93,9 @@ const T = {
       green:"gruen/rot",lead:"Leadership",trend:"Trend",breadth:"Breite",
       pmwarn:"Pre-Market-Daten sind duenn und unzuverlaessig. Gaps faden oft. Als Hinweis, nicht als Signal lesen.",
       foot:"Watchlist-Generator, kein Kaufsignal. Keine Stops/Position-Sizing/Erwartungswert enthalten. Themen-ETF-RS = echtes IBD-aehnliches Relative-Strength-Rating (gewichtete 3/6/9/12-Monats-Outperformance ggue. ^GSPC, Perzentil-Rang 1-99 unter den Themen-ETFs). Leader-RS/Sektor-Tag stammen aus dem Markets-360-Export.",
-      leerLeader:"Keine Leader-Aktien gefunden - entweder keine Markets-360-Daten verfuegbar, oder kein Titel im Universum passt zu den aktuell staerksten Themen (bei Nischen-ETFs wie Biotech/Cyber/Uran/Regionalbanken normal, siehe Wiki)."},
+      leerLeader:"Keine Leader-Aktien gefunden - entweder keine Markets-360-Daten verfuegbar, oder kein Titel im Universum passt zu den aktuell staerksten Themen (bei Nischen-ETFs wie Biotech/Cyber/Uran/Regionalbanken normal, siehe Wiki).",
+      bt:"Trefferquoten (Forward-Test)",btHor:"Horizont",btWin:"Win %",btAvg:"Ø %",btMed:"Median %",
+      btEtf:"Top-RS-Themen-ETF (RS≥80)",btLeader:"Leader-Aktie",btResil:"Resilienz-Kandidat"},
   en:{title:"Rotation Dashboard",sectors:"Strongest Sectors / Themes (IBD RS)",
       leaders:"Leaders inside the strongest themes",resil:"Red-Day Resilience",
       pm:"Pre-Market Moves",rs:"RS",price:"Price",mom:"Mom",chg1m:"1M%",
@@ -100,7 +104,9 @@ const T = {
       trend:"Trend",breadth:"Breadth",
       pmwarn:"Pre-market data is thin and unreliable. Gaps fade often. Read as a hint, not a signal.",
       foot:"Watchlist generator, not a buy signal. No stops/sizing/expectancy. Theme-ETF RS = real IBD-like Relative Strength Rating (weighted 3/6/9/12-month outperformance vs ^GSPC, percentile 1-99 among the theme ETFs). Leader RS/sector tag come from the Markets-360 export.",
-      leerLeader:"No leader stocks found - either no Markets-360 data available, or nothing in the universe maps to the currently strongest themes (normal for niche ETFs like Biotech/Cyber/Uranium/Regional Banks, see wiki)."}
+      leerLeader:"No leader stocks found - either no Markets-360 data available, or nothing in the universe maps to the currently strongest themes (normal for niche ETFs like Biotech/Cyber/Uranium/Regional Banks, see wiki).",
+      bt:"Hit Rates (Forward Test)",btHor:"Horizon",btWin:"Win %",btAvg:"Avg %",btMed:"Median %",
+      btEtf:"Top-RS Theme ETF (RS≥80)",btLeader:"Leader Stock",btResil:"Resilience Candidate"}
 };
 
 /* TradingView-Verlinkung (seit 2026-08-09, 1:1 Port aus Signal-Hub/setup-
@@ -226,7 +232,44 @@ function render(){
 
   document.getElementById("content").innerHTML=html;
 }
-function toggleLang(){LANG=LANG==="de"?"en":"de";render();}
+let BT = (typeof ROTATION_BACKTEST_DATA !== "undefined") ? ROTATION_BACKTEST_DATA : null;
+function renderBacktest(){
+  const el=document.getElementById("backtest");
+  if(!el) return;
+  if(!BT || !BT.forward_realisiert){ el.innerHTML=""; return; }
+  const t=T[LANG];
+  const labels={top_rs_etf:t.btEtf, leader:t.btLeader, resilient:t.btResil};
+  let rows="", zeilen=0;
+  for(const kategorie of ["top_rs_etf","leader","resilient"]){
+    for(const hor of ["4W","8W","12W"]){
+      const s=(BT.forward_realisiert[kategorie]||{})[hor];
+      if(!s||!s.n) continue;
+      zeilen++;
+      rows+=`<tr><td>${labels[kategorie]}</td><td>${hor}</td><td>${s.n}</td>`+
+        `<td>${s.win==null?"–":s.win}</td><td class="${cls(s.avg)}">${sgn(s.avg)}</td>`+
+        `<td class="${cls(s.median)}">${sgn(s.median)}</td></tr>`;
+    }
+  }
+  if(!zeilen){ el.innerHTML=""; return; }
+  el.innerHTML=`<h2>${t.bt}</h2><div class="twrap"><table><thead><tr>`+
+    `<th>Kategorie</th><th>${t.btHor}</th><th>n</th><th>${t.btWin}</th>`+
+    `<th>${t.btAvg}</th><th>${t.btMed}</th></tr></thead><tbody>${rows}</tbody></table></div>`+
+    `<p class="meta" style="margin-top:8px">${BT.hinweis||""}</p>`;
+}
+async function ladeBacktest(){
+  // Optional wie rotation.json selbst - fehlt die Datei (allererster Lauf,
+  // bevor das Logbuch existiert), bleibt der Abschnitt einfach leer.
+  try{
+    const r=await fetch("data/rotation_backtest.json",{cache:"no-store"});
+    if(r.ok){ BT=await r.json(); renderBacktest(); return; }
+  }catch(e){}
+  const s=document.createElement("script");
+  s.src="data/rotation_backtest.js";
+  s.onload=()=>{ BT=(typeof ROTATION_BACKTEST_DATA!=="undefined")?ROTATION_BACKTEST_DATA:BT; renderBacktest(); };
+  s.onerror=()=>{};
+  document.head.appendChild(s);
+}
+function toggleLang(){LANG=LANG==="de"?"en":"de";render();renderBacktest();}
 
 /* ---- Cloud-Workflow-Trigger (identisch zu Signal-Hub/Price-Action-Hub,
    1:1 kopiert - Single-File-App-Prinzip). Startet denselben pipeline.yml,
@@ -282,6 +325,8 @@ fetch("data/rotation.json", {cache:"no-store"})
   .then(d=>{ DATA=d; render(); })
   .catch(()=>{ render(); });
 render();
+renderBacktest();   // zeigt sofort einen evtl. file://-Fallback-Stand
+ladeBacktest();     // optional, blockiert den ersten Render nicht
 </script>
 </body>
 </html>

@@ -22,6 +22,7 @@ import kursdaten
 import markets360_reader
 import pfade
 import rs as rs_mod
+import rotation_backtest
 
 TOP_SEKTOREN_N = 7
 LEADER_JE_SEKTOR = 3
@@ -264,6 +265,15 @@ def main():
 
     print(f"Rotation-Dashboard: {len(sektoren)} Sektoren, {len(leaders)} Leader, "
           f"{len(resilient)} Resilienz-Kandidaten, Universum {len(aktien)} Aktien.")
+
+    # Forward-Test der drei Setup-Kategorien (seit 2026-08-17): heutige Top-
+    # RS-ETFs/Leader/Resilienz-Ticker ins Logbuch + gereifte Picks auswerten.
+    # Scheitert nie hart (nur kein Backtest-Panel).
+    try:
+        rotation_backtest.log_und_evaluate()
+    except Exception as ex:
+        print(f"Rotation-Backtest uebersprungen ({ex}).")
+
     return True
 
 
