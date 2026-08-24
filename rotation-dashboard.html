@@ -2,11 +2,18 @@
 <html lang="de">
 <head>
 <meta charset="utf-8"/>
+<script>document.documentElement.dataset.theme=localStorage.getItem('mts-rotation-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');</script>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Rotation-Dashboard</title>
 <style>
-:root{--bg:#0c0e12;--card:#161a22;--line:#262c38;--tx:#e6e9ef;--mut:#8b93a3;
---grn:#36d399;--red:#f87272;--amb:#fbbd23;--blu:#60a5fa;--acc:#7c5cff;}
+:root{color-scheme:dark;--bg:#0c0e12;--card:#161a22;--line:#262c38;--tx:#e6e9ef;--mut:#8b93a3;
+--grn:#36d399;--red:#f87272;--amb:#fbbd23;--blu:#60a5fa;--acc:#7c5cff;
+--pill-bg:#0e1117;--hover-bg:#1b212c;--regime-bg:linear-gradient(135deg,#1a1f2b,#13161d);
+--warn-bg:#241a0a;--warn-border:#5a431f;--tag-hot-border:#1f5a44;}
+:root[data-theme="light"]{color-scheme:light;--bg:#F4F5F8;--card:#FFFFFF;--line:rgba(10,14,20,.12);--tx:#14171F;--mut:#57616F;
+--grn:#2E7D52;--red:#A1402F;--amb:#A85F1C;--blu:#1D4ED8;--acc:#5A3FD9;
+--pill-bg:#EEF0F4;--hover-bg:rgba(10,14,20,.04);--regime-bg:linear-gradient(135deg,rgba(124,92,255,.08),#FFFFFF);
+--warn-bg:rgba(168,95,28,.10);--warn-border:rgba(168,95,28,.35);--tag-hot-border:rgba(46,125,82,.4);}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro",Segoe UI,Roboto,sans-serif;padding:20px;max-width:1180px;margin:0 auto}
 h1{font-size:20px;font-weight:650;letter-spacing:-.2px}
@@ -16,11 +23,11 @@ h2{font-size:14px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);
 .btn{background:var(--card);border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;text-decoration:none;display:inline-flex;align-items:center}
 .btn:hover{border-color:var(--acc)}
 .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.regime{background:linear-gradient(135deg,#1a1f2b,#13161d);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:16px}
+.regime{background:var(--regime-bg);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:16px}
 .regime .lead{font-size:18px;font-weight:650;margin-bottom:4px}
 .regime .note{color:var(--mut)}
 .pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.pill{background:#0e1117;border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--mut)}
+.pill{background:var(--pill-bg);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--mut)}
 .pill b{color:var(--tx)}
 /* overflow-x:auto auf einem eigenen Wrapper statt direkt auf table - sonst
    zwingt eine zu breite Tabelle (viele Spalten + white-space:nowrap) mobile
@@ -34,7 +41,7 @@ th,td{padding:9px 11px;text-align:right;border-bottom:1px solid var(--line);whit
 th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);text-align:right}
 th:first-child,td:first-child{text-align:left}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:#1b212c}
+tr:hover td{background:var(--hover-bg)}
 .sym{font-weight:650}
 a.sym{color:inherit;text-decoration:none;border-bottom:1px dotted var(--mut)}
 a.sym:hover{color:var(--acc);border-bottom-color:var(--acc)}
@@ -43,9 +50,13 @@ a.sym:hover{color:var(--acc);border-bottom-color:var(--acc)}
 .bar{display:inline-block;height:6px;border-radius:3px;background:var(--acc);vertical-align:middle}
 .rs{font-weight:650}
 .tag{font-size:11px;padding:1px 7px;border-radius:6px;border:1px solid var(--line);color:var(--mut)}
-.tag.hot{color:var(--grn);border-color:#1f5a44}
+.tag.hot{color:var(--grn);border-color:var(--tag-hot-border)}
 .foot{color:var(--mut);font-size:11px;margin-top:30px;border-top:1px solid var(--line);padding-top:14px}
-.warn{background:#241a0a;border:1px solid #5a431f;color:var(--amb);border-radius:10px;padding:12px;margin-top:14px;font-size:13px}
+.warn{background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--amb);border-radius:10px;padding:12px;margin-top:14px;font-size:13px}
+.icon-btn{border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:8px;
+          width:30px;height:30px;font-size:13px;cursor:pointer;display:inline-flex;
+          align-items:center;justify-content:center;flex-shrink:0}
+.icon-btn:hover{border-color:var(--acc)}
 </style>
 </head>
 <body>
@@ -58,6 +69,7 @@ a.sym:hover{color:var(--acc);border-bottom-color:var(--acc)}
     <a class="btn" href="https://claude.ai/code/artifact/96e3caea-0cf8-4fbc-9be7-9580894c8794" target="_blank" rel="noopener" title="Betriebsanleitung: Marktregime, Themen-RS, Tabellen, Datenherkunft">📖 Anleitung</a>
     <button class="btn" id="cloudbtn" onclick="triggerCloudWorkflow('Miksch52','signal-hub','pipeline.yml',this,'Signal-Hub + Rotation-Dashboard-Update')">☁️ Cloud-Scan starten</button>
     <button class="btn" id="lang" onclick="toggleLang()">EN</button>
+    <button class="icon-btn" id="theme-toggle" title="Hell/Dunkel umschalten" aria-label="Hell/Dunkel umschalten" type="button">🌙</button>
   </div>
 </div>
 
@@ -373,6 +385,22 @@ fetch("data/rotation.json", {cache:"no-store"})
 render();
 renderBacktest();   // zeigt sofort einen evtl. file://-Fallback-Stand
 ladeBacktest();     // optional, blockiert den ersten Render nicht
+
+// Theme-Toggle (Grundzustand wurde bereits im <head> ohne Flackern gesetzt)
+(function () {
+  const KEY = 'mts-rotation-theme';
+  const btn = document.getElementById('theme-toggle');
+  function sync() {
+    btn.textContent = document.documentElement.dataset.theme === 'dark' ? '🌙' : '☀️';
+  }
+  sync();
+  btn.addEventListener('click', function () {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem(KEY, next);
+    sync();
+  });
+})();
 </script>
 </body>
 </html>
