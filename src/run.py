@@ -217,7 +217,8 @@ def main():
             continue
         pfh = pct_from_high(c)
         leaders.append({
-            "ticker": a["symbol"], "theme": etfs.THEMEN_ETFS.get(a["thema"], a["sektor_raw"]),
+            "ticker": a["symbol"], "name": a.get("name"),
+            "theme": etfs.THEMEN_ETFS.get(a["thema"], a["sektor_raw"]),
             "rs": int(a["rs"]), "price": c[-1],
             "r1m": perf(c, 21), "r3m": perf(c, 63),
             "pct_from_high": pfh,
@@ -236,7 +237,8 @@ def main():
         if not res:
             continue
         resilient.append({
-            "ticker": sym, "theme": etfs.THEMEN_ETFS.get(a["thema"], a["sektor_raw"]),
+            "ticker": sym, "name": a.get("name"),
+            "theme": etfs.THEMEN_ETFS.get(a["thema"], a["sektor_raw"]),
             "rs": int(a["rs"]), "pct_from_high": pct_from_high(c),
             **res,
         })

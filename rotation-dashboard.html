@@ -57,6 +57,19 @@ a.sym:hover{color:var(--acc);border-bottom-color:var(--acc)}
           width:30px;height:30px;font-size:13px;cursor:pointer;display:inline-flex;
           align-items:center;justify-content:center;flex-shrink:0}
 .icon-btn:hover{border-color:var(--acc)}
+.filterbar{margin-top:14px}
+.filterbar input{width:100%;background:var(--card);border:1px solid var(--line);color:var(--tx);
+  border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit}
+.filterbar input:focus{outline:none;border-color:var(--acc)}
+.filterbar input::placeholder{color:var(--mut)}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--tx)}
+th.sortable.sort-active{color:var(--acc)}
+.arrow{font-size:9px;margin-left:2px}
+.cname{color:var(--mut);font-size:12px}
+.lupe{margin-left:6px;text-decoration:none;opacity:.55;font-size:12px}
+.lupe:hover{opacity:1}
+.noresult{color:var(--mut);padding:14px 2px}
 </style>
 </head>
 <body>
@@ -73,6 +86,7 @@ a.sym:hover{color:var(--acc);border-bottom-color:var(--acc)}
   </div>
 </div>
 
+<div class="filterbar"><input id="filterInput" type="text" placeholder="Filtern nach Ticker, Name oder Thema…" oninput="FILTER=this.value;render();"></div>
 <div id="pmwarn" class="warn" style="display:none"></div>
 <div id="regime"></div>
 <div id="content"></div>
@@ -107,7 +121,8 @@ const T = {
       foot:"Watchlist-Generator, kein Kaufsignal. Keine Stops/Position-Sizing/Erwartungswert enthalten. Themen-ETF-RS = echtes IBD-aehnliches Relative-Strength-Rating (gewichtete 3/6/9/12-Monats-Outperformance ggue. ^GSPC, Perzentil-Rang 1-99 unter den Themen-ETFs). Leader-RS/Sektor-Tag stammen aus dem Markets-360-Export.",
       leerLeader:"Keine Leader-Aktien gefunden - entweder keine Markets-360-Daten verfuegbar, oder kein Titel im Universum passt zu den aktuell staerksten Themen (bei Nischen-ETFs wie Biotech/Cyber/Uran/Regionalbanken normal, siehe Wiki).",
       bt:"Trefferquoten (Forward-Test)",btHor:"Horizont",btWin:"Win %",btAvg:"Ø %",btMed:"Median %",
-      btEtf:"Top-RS-Themen-ETF (RS≥80)",btLeader:"Leader-Aktie",btResil:"Resilienz-Kandidat"},
+      btEtf:"Top-RS-Themen-ETF (RS≥80)",btLeader:"Leader-Aktie",btResil:"Resilienz-Kandidat",
+      filterph:"Filtern nach Ticker, Name oder Thema…",noresult:"Keine Treffer fuer diesen Filter."},
   en:{title:"Rotation Dashboard",sectors:"Strongest Sectors / Themes (IBD RS)",
       leaders:"Leaders inside the strongest themes",resil:"Red-Day Resilience",
       pm:"Pre-Market Moves",rs:"RS",price:"Price",mom:"Mom",chg1m:"1M%",
@@ -118,7 +133,8 @@ const T = {
       foot:"Watchlist generator, not a buy signal. No stops/sizing/expectancy. Theme-ETF RS = real IBD-like Relative Strength Rating (weighted 3/6/9/12-month outperformance vs ^GSPC, percentile 1-99 among the theme ETFs). Leader RS/sector tag come from the Markets-360 export.",
       leerLeader:"No leader stocks found - either no Markets-360 data available, or nothing in the universe maps to the currently strongest themes (normal for niche ETFs like Biotech/Cyber/Uranium/Regional Banks, see wiki).",
       bt:"Hit Rates (Forward Test)",btHor:"Horizon",btWin:"Win %",btAvg:"Avg %",btMed:"Median %",
-      btEtf:"Top-RS Theme ETF (RS≥80)",btLeader:"Leader Stock",btResil:"Resilience Candidate"}
+      btEtf:"Top-RS Theme ETF (RS≥80)",btLeader:"Leader Stock",btResil:"Resilience Candidate",
+      filterph:"Filter by ticker, name or theme…",noresult:"No matches for this filter."}
 };
 
 /* TradingView-Verlinkung (seit 2026-08-09, 1:1 Port aus Signal-Hub/setup-
@@ -140,14 +156,68 @@ function tvSymbol(ticker){
   const exch = YAHOO_SUFFIX_TV_EXCHANGE[suf.toUpperCase()];
   return exch ? `${exch}:${basis}` : basis;
 }
-function tvLink(ticker, theme){
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]||c)); }
+
+// opts.name: voller Firmenname (aus Markets-360-Export, siehe run.py) - fehlt
+// bei ETFs (sectors-Tabelle) und ggf. bei aelteren rotation.json-Staenden.
+// opts.lupe: Deeplink zur Minervini-Setup-Analyse, 1:1 dasselbe Muster wie
+// index.html/Signal-Hub/Price-Action-Hub (setup-detail.html?ticker=...) -
+// nur fuer Einzelaktien sinnvoll, nicht fuer Themen-ETFs.
+function tvLink(ticker, theme, opts={}){
   const href = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol(ticker))}`;
-  return `<a class="sym" href="${href}" target="_blank" rel="noopener" title="Chart auf TradingView oeffnen">${ticker}</a>${theme?` <span class="theme">${theme}</span>`:""}`;
+  const nameHtml = opts.name ? ` <span class="cname">${esc(opts.name)}</span>` : "";
+  const themeHtml = theme ? ` <span class="theme">${esc(theme)}</span>` : "";
+  const lupeHtml = opts.lupe
+    ? ` <a class="lupe" href="../Signal-Hub/setup-detail.html?ticker=${encodeURIComponent(ticker)}" target="_blank" rel="noopener" title="Setup-Analyse (Minervini-Kriterien)">🔍</a>`
+    : "";
+  return `<a class="sym" href="${href}" target="_blank" rel="noopener" title="Chart auf TradingView oeffnen">${ticker}</a>${nameHtml}${themeHtml}${lupeHtml}`;
 }
 
 function cls(v){return v>0?"pos":(v<0?"neg":"")}
 function fmt(v,d=1){return (v===null||v===undefined||isNaN(v))?"–":Number(v).toFixed(d)}
 function sgn(v,d=1){if(v===null||v===undefined||isNaN(v))return "–";return (v>0?"+":"")+Number(v).toFixed(d)}
+
+// ---- Sortieren/Filtern (seit 2026-08-30): ein globales Textfeld filtert
+// Ticker/Name/Thema in allen vier Tabellen gleichzeitig; jede Tabelle hat
+// ihren eigenen Klick-Sortierzustand (Standardreihenfolge = wie vom Backend
+// bereits nach RS/rel_on_red sortiert geliefert, siehe run.py). ----
+let FILTER = "";
+const SORT = {
+  sectors: {key:null, dir:-1},
+  leaders: {key:null, dir:-1},
+  resilient: {key:null, dir:-1},
+  premarket: {key:null, dir:-1},
+};
+const TEXT_KEYS = new Set(["etf","ticker","theme"]);
+function cmp(va,vb){
+  if(va==null && vb==null) return 0;
+  if(va==null) return 1;
+  if(vb==null) return -1;
+  if(typeof va === "number" && typeof vb === "number") return va-vb;
+  return String(va).localeCompare(String(vb));
+}
+function sortRows(rows, table){
+  const s = SORT[table];
+  if(!s.key) return rows;
+  return [...rows].sort((a,b)=>s.dir*cmp(a[s.key], b[s.key]));
+}
+function matchesFilter(...fields){
+  if(!FILTER.trim()) return true;
+  const f = FILTER.trim().toLowerCase();
+  return fields.some(v=>v!=null && String(v).toLowerCase().includes(f));
+}
+function setSort(table, key){
+  const s = SORT[table];
+  if(s.key === key) s.dir *= -1;
+  else { s.key = key; s.dir = TEXT_KEYS.has(key) ? 1 : -1; }
+  render();
+}
+function th(label, table, key){
+  const s = SORT[table];
+  const active = s.key === key;
+  const arrow = active ? `<span class="arrow">${s.dir===1?"▲":"▼"}</span>` : "";
+  return `<th class="sortable${active?" sort-active":""}" onclick="setSort('${table}','${key}')">${label}${arrow}</th>`;
+}
 
 function render(){
   if(!DATA){
@@ -178,67 +248,97 @@ function render(){
   if(DATA.mode==="premarket"){pw.style.display="block";pw.textContent=t.pmwarn;}
   else pw.style.display="none";
 
+  const fi=document.getElementById("filterInput");
+  if(fi) fi.placeholder = t.filterph;
+
   let html="";
 
-  html+=`<h2>${t.sectors}</h2><div class="twrap"><table><thead><tr>`+
-    `<th>ETF / Thema</th><th>${t.rs}</th><th>${t.chg1m}</th><th>${t.chg3m}</th>`+
-    `<th>${t.fromhi}</th><th>>50MA</th></tr></thead><tbody>`;
-  DATA.sectors.forEach(s=>{
-    const w=Math.max(2,Math.round((s.rs||0)/100*60));
-    html+=`<tr><td>${tvLink(s.etf, s.theme)}</td>`+
-      `<td><span class="rs">${s.rs??"–"}</span> <span class="bar" style="width:${w}px"></span></td>`+
-      `<td class="${cls(s.r1m)}">${sgn(s.r1m)}</td>`+
-      `<td class="${cls(s.r3m)}">${sgn(s.r3m)}</td>`+
-      `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td>`+
-      `<td>${s.above_ma50?"✓":"·"}</td></tr>`;
-  });
-  html+=`</tbody></table></div>`;
+  {
+    const rows = sortRows(DATA.sectors.filter(s=>matchesFilter(s.etf, s.theme)), "sectors");
+    html+=`<h2>${t.sectors}</h2><div class="twrap"><table><thead><tr>`+
+      th("ETF / Thema","sectors","etf")+th(t.rs,"sectors","rs")+th(t.chg1m,"sectors","r1m")+
+      th(t.chg3m,"sectors","r3m")+th(t.fromhi,"sectors","pct_from_high")+th(">50MA","sectors","above_ma50")+
+      `</tr></thead><tbody>`;
+    if(rows.length){
+      rows.forEach(s=>{
+        const w=Math.max(2,Math.round((s.rs||0)/100*60));
+        html+=`<tr><td>${tvLink(s.etf, s.theme)}</td>`+
+          `<td><span class="rs">${s.rs??"–"}</span> <span class="bar" style="width:${w}px"></span></td>`+
+          `<td class="${cls(s.r1m)}">${sgn(s.r1m)}</td>`+
+          `<td class="${cls(s.r3m)}">${sgn(s.r3m)}</td>`+
+          `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td>`+
+          `<td>${s.above_ma50?"✓":"·"}</td></tr>`;
+      });
+    } else {
+      html+=`<tr><td colspan="6" class="noresult">${t.noresult}</td></tr>`;
+    }
+    html+=`</tbody></table></div>`;
+  }
 
   if(DATA.mode!=="premarket"){
     html+=`<h2>${t.leaders}</h2>`;
     if(DATA.leaders && DATA.leaders.length){
+      const rows = sortRows(DATA.leaders.filter(s=>matchesFilter(s.ticker, s.name, s.theme)), "leaders");
       html+=`<div class="twrap"><table><thead><tr>`+
-        `<th>Symbol</th><th>${t.rs}</th><th>${t.price}</th><th>${t.chg1m}</th>`+
-        `<th>${t.chg3m}</th><th>${t.fromhi}</th><th>${t.vol}</th><th>${t.tt}</th></tr></thead><tbody>`;
-      DATA.leaders.forEach(s=>{
-        const hot=s.near_high?` <span class="tag hot">${LANG==="de"?"nahe Hoch":"near high"}</span>`:"";
-        html+=`<tr><td>${tvLink(s.ticker, s.theme)}${hot}</td>`+
-          `<td class="rs">${s.rs??"–"}</td><td>${fmt(s.price,2)}</td>`+
-          `<td class="${cls(s.r1m)}">${sgn(s.r1m)}</td>`+
-          `<td class="${cls(s.r3m)}">${sgn(s.r3m)}</td>`+
-          `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td>`+
-          `<td>${fmt(s.vol_ratio,2)}</td>`+
-          `<td><span class="tag">${s.tt_crit??"–"}/8</span></td></tr>`;
-      });
+        th("Symbol","leaders","ticker")+th(t.rs,"leaders","rs")+th(t.price,"leaders","price")+
+        th(t.chg1m,"leaders","r1m")+th(t.chg3m,"leaders","r3m")+th(t.fromhi,"leaders","pct_from_high")+
+        th(t.vol,"leaders","vol_ratio")+th(t.tt,"leaders","tt_crit")+`</tr></thead><tbody>`;
+      if(rows.length){
+        rows.forEach(s=>{
+          const hot=s.near_high?` <span class="tag hot">${LANG==="de"?"nahe Hoch":"near high"}</span>`:"";
+          html+=`<tr><td>${tvLink(s.ticker, s.theme, {name:s.name, lupe:true})}${hot}</td>`+
+            `<td class="rs">${s.rs??"–"}</td><td>${fmt(s.price,2)}</td>`+
+            `<td class="${cls(s.r1m)}">${sgn(s.r1m)}</td>`+
+            `<td class="${cls(s.r3m)}">${sgn(s.r3m)}</td>`+
+            `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td>`+
+            `<td>${fmt(s.vol_ratio,2)}</td>`+
+            `<td><span class="tag">${s.tt_crit??"–"}/8</span></td></tr>`;
+        });
+      } else {
+        html+=`<tr><td colspan="8" class="noresult">${t.noresult}</td></tr>`;
+      }
       html+=`</tbody></table></div>`;
     } else {
       html+=`<p class="meta">${t.leerLeader}</p>`;
     }
 
     if(DATA.resilient && DATA.resilient.length){
+      const rows = sortRows(DATA.resilient.filter(s=>matchesFilter(s.ticker, s.name, s.theme)), "resilient");
       html+=`<h2>${t.resil}</h2><div class="twrap"><table><thead><tr>`+
-        `<th>Symbol</th><th>${t.relred}</th><th>${t.green}</th><th>${t.rs}</th><th>${t.fromhi}</th></tr></thead><tbody>`;
-      DATA.resilient.forEach(s=>{
-        html+=`<tr><td>${tvLink(s.ticker, s.theme)}</td>`+
-          `<td class="${cls(s.rel_on_red)}">${sgn(s.rel_on_red,2)}</td>`+
-          `<td>${s.green_on_red}/${s.n_red}</td>`+
-          `<td class="rs">${s.rs??"–"}</td>`+
-          `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td></tr>`;
-      });
+        th("Symbol","resilient","ticker")+th(t.relred,"resilient","rel_on_red")+
+        th(t.green,"resilient","green_on_red")+th(t.rs,"resilient","rs")+th(t.fromhi,"resilient","pct_from_high")+
+        `</tr></thead><tbody>`;
+      if(rows.length){
+        rows.forEach(s=>{
+          html+=`<tr><td>${tvLink(s.ticker, s.theme, {name:s.name, lupe:true})}</td>`+
+            `<td class="${cls(s.rel_on_red)}">${sgn(s.rel_on_red,2)}</td>`+
+            `<td>${s.green_on_red}/${s.n_red}</td>`+
+            `<td class="rs">${s.rs??"–"}</td>`+
+            `<td class="${cls(s.pct_from_high)}">${fmt(s.pct_from_high)}</td></tr>`;
+        });
+      } else {
+        html+=`<tr><td colspan="5" class="noresult">${t.noresult}</td></tr>`;
+      }
       html+=`</tbody></table></div>`;
     }
   }
 
   if(DATA.mode==="premarket" && DATA.premarket && DATA.premarket.length){
+    const rows = sortRows(DATA.premarket.filter(s=>matchesFilter(s.ticker, s.name, s.theme)), "premarket");
     html+=`<h2>${t.pm}</h2><div class="twrap"><table><thead><tr>`+
-      `<th>Symbol</th><th>${t.gap}</th><th>${t.price}</th><th>${t.pmvol}</th><th>${t.rs}</th></tr></thead><tbody>`;
-    DATA.premarket.forEach(s=>{
-      html+=`<tr><td>${tvLink(s.ticker, s.theme)}</td>`+
-        `<td class="${cls(s.gap_pct)}">${sgn(s.gap_pct,2)}</td>`+
-        `<td>${fmt(s.last,2)}</td>`+
-        `<td>${Math.round(s.pm_vol).toLocaleString()}</td>`+
-        `<td class="rs">${s.rs??"–"}</td></tr>`;
-    });
+      th("Symbol","premarket","ticker")+th(t.gap,"premarket","gap_pct")+th(t.price,"premarket","last")+
+      th(t.pmvol,"premarket","pm_vol")+th(t.rs,"premarket","rs")+`</tr></thead><tbody>`;
+    if(rows.length){
+      rows.forEach(s=>{
+        html+=`<tr><td>${tvLink(s.ticker, s.theme, {name:s.name, lupe:true})}</td>`+
+          `<td class="${cls(s.gap_pct)}">${sgn(s.gap_pct,2)}</td>`+
+          `<td>${fmt(s.last,2)}</td>`+
+          `<td>${Math.round(s.pm_vol).toLocaleString()}</td>`+
+          `<td class="rs">${s.rs??"–"}</td></tr>`;
+      });
+    } else {
+      html+=`<tr><td colspan="5" class="noresult">${t.noresult}</td></tr>`;
+    }
     html+=`</tbody></table></div>`;
   }
 
@@ -252,7 +352,6 @@ let BT = (typeof ROTATION_BACKTEST_DATA !== "undefined") ? ROTATION_BACKTEST_DAT
 // --primary/--primary2, da Rotation-Dashboard kein Farbpaar im :root hat).
 const BT_RAMP=['#4C3D97','#644CCA','#7C5CFF'];   // 4W/8W/12W
 const BT_HORIZONTE=['4W','8W','12W'];
-function esc(s){ return (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]||c)); }
 function btChartHtml(rows, forwardData){
   const sichtbar=rows
     .map(r=>({...r, vorhanden: BT_HORIZONTE.filter(h=>(forwardData[r.key]||{})[h]?.n)}))
