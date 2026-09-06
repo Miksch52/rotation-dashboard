@@ -20,6 +20,20 @@ verlaessliche Datengrundlage.
 """
 
 SEKTOR_ZU_THEMA = {
+    # Aliasse fuer dieselben Sektoren unter neuerer GICS-/Yahoo-Schreibweise
+    # (gefunden 2026-09-06 beim Sektor-Kontext-Einbau in die Setup-Analyse):
+    # in signals.json trugen 142 von 496 Treffern einen bekannten Sektor, der
+    # hier trotzdem ins Leere lief - allein "Health Care" 76 und "Consumer
+    # Discretionary" 50 Werte. Folge war nicht nur eine fehlende Anzeige:
+    # diese Aktien konnten im Rotation-Dashboard nie als Leader ihres Themas
+    # auftauchen, weil die Zuordnung schon vorher scheiterte.
+    "Health Care": "XLV",              # bisher nur "Healthcare"
+    "Consumer Discretionary": "XLY",   # bisher nur "Consumer Cyclical"
+    "Consumer Staples": "XLP",         # bisher nur "Consumer Defensive"
+    "Telecommunications": "XLC",
+    # Real Estate bleibt bewusst ohne Zuordnung: unter den ~20 Themen-ETFs
+    # gibt es kein Immobilien-Gegenstueck (kein XLRE) - eine Zuordnung auf ein
+    # fachfremdes Thema waere schlechter als gar keine.
     "Basic Materials": "XME",
     "Commercial Services": "XLI",
     "Communication Services": "XLC",
