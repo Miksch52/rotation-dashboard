@@ -17,6 +17,7 @@ import ssl
 import time
 import urllib.parse
 import urllib.request
+from datetime import datetime
 
 import pfade
 
@@ -48,18 +49,26 @@ def yahoo_chart(symbol, range_="2y"):
     if not res:
         return None
     r = res[0]
+    ts = r.get("timestamp") or []
     q = r.get("indicators", {}).get("quote", [{}])[0]
     co, vo = q.get("close") or [], q.get("volume") or []
-    closes, volumes = [], []
+    closes, volumes, dates = [], [], []
     for i in range(len(co)):
         c = co[i]
         if c is None:
             continue
         closes.append(c)
         volumes.append(vo[i] if i < len(vo) and vo[i] is not None else None)
+        # Datum je Bar (seit 2026-09-12, Systempruefung Punkt 5): der
+        # Index-Vergleich sucht damit den Startpunkt exakt ueber das
+        # Signaldatum statt ueber die Naeherung Kalendertage * 5/7. Yahoo
+        # liefert die Zeitstempel ohnehin mit; bis hierher wurden sie nur
+        # verworfen. Zusatzfeld, kein Bruch fuer bestehende Aufrufer.
+        dates.append(datetime.fromtimestamp(ts[i]).strftime("%Y-%m-%d")
+                     if i < len(ts) and ts[i] else None)
     if len(closes) < 60:
         return None
-    return {"closes": closes, "volumes": volumes}
+    return {"closes": closes, "volumes": volumes, "dates": dates}
 
 
 def lade_cache():
