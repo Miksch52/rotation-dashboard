@@ -123,6 +123,7 @@ const T = {
       leerLeader:"Keine Leader-Aktien gefunden - entweder keine Markets-360-Daten verfuegbar, oder kein Titel im Universum passt zu den aktuell staerksten Themen (bei Nischen-ETFs wie Biotech/Cyber/Uran/Regionalbanken normal, siehe Wiki).",
       bt:"Trefferquoten (Forward-Test)",btHor:"Horizont",btWin:"Win %",btAvg:"Ø %",btMed:"Median %",
       btEtf:"Top-RS-Themen-ETF (RS≥80)",btLeader:"Leader-Aktie",btResil:"Resilienz-Kandidat",
+      btReift:"🌱 Reift noch — das Logbuch wurde ausgewertet, aber noch keine Episode ist alt genug fuer den kuerzesten Horizont (4W = 21 Kalendertage).",
       filterph:"Filtern nach Ticker, Name oder Thema…",noresult:"Keine Treffer fuer diesen Filter."},
   en:{title:"Rotation Dashboard",sectors:"Strongest Sectors / Themes (IBD RS)",
       leaders:"Leaders inside the strongest themes",resil:"Red-Day Resilience",
@@ -135,6 +136,7 @@ const T = {
       leerLeader:"No leader stocks found - either no Markets-360 data available, or nothing in the universe maps to the currently strongest themes (normal for niche ETFs like Biotech/Cyber/Uranium/Regional Banks, see wiki).",
       bt:"Hit Rates (Forward Test)",btHor:"Horizon",btWin:"Win %",btAvg:"Avg %",btMed:"Median %",
       btEtf:"Top-RS Theme ETF (RS≥80)",btLeader:"Leader Stock",btResil:"Resilience Candidate",
+      btReift:"🌱 Still maturing — the logbook was evaluated, but no episode is old enough yet for the shortest horizon (4W = 21 calendar days).",
       filterph:"Filter by ticker, name or theme…",noresult:"No matches for this filter."}
 };
 
@@ -405,7 +407,14 @@ function renderBacktest(){
         `<td class="${cls(s.median)}">${sgn(s.median)}</td></tr>`;
     }
   }
-  if(!zeilen){ el.innerHTML=""; return; }
+  if(!zeilen){
+    // Reift noch (Systempruefung Punkt 8, 13.09.): ein Logbuch ohne gereifte
+    // Episode (z.B. direkt nach der Aufbewahrungs-Korrektur vom 13.09., als
+    // alle sechs Logbuecher neu zu wachsen begannen) blieb bisher komplett
+    // unsichtbar - nicht von einem echten Fehler (Datei fehlt) unterscheidbar.
+    el.innerHTML=`<h2>${t.bt}</h2><p class="meta">${t.btReift}</p>`;
+    return;
+  }
   const chart=btChartHtml(
     [{key:"top_rs_etf",label:t.btEtf},{key:"leader",label:t.btLeader},{key:"resilient",label:t.btResil}],
     BT.forward_realisiert);
