@@ -167,8 +167,9 @@ def evaluate():
     # meldete diese Datei bewusst nur absolute Returns - "Leader-Aktie
     # 91,7 % Trefferquote" war damit genauso wenig belegt wie eine schwache
     # Kohorte, nur in die andere Richtung. Das Rotations-Logbuch fuehrt
-    # keinen Markt (die Engine arbeitet ausschliesslich mit US-Themen-ETFs
-    # und deren Leadern) -> index_vergleich faellt auf ^GSPC zurueck.
+    # keinen Markt; seit 2026-09-13 leitet index_vergleich.markt_fuer ihn aus
+    # dem Boersensuffix ab (unter den Leadern/Resilienz-Kandidaten stehen auch
+    # europaeische Werte wie SHEL.L oder ASML.AS - vorher alle gegen ^GSPC).
     eimer_edge = {k: {h: [] for h, _ in HORIZONTE} for k in KATEGORIEN}
     idx_charts = index_vergleich.lade_index_charts(
         kursdaten.hole_chart_cached, cache, heute_str)
@@ -192,7 +193,8 @@ def evaluate():
         bk, ret = index_vergleich.laengster_horizont(rets)
         if bk is None:
             continue
-        edges = index_vergleich.fenster_edges(idx_charts, e.get("markt"), e["datum"], rets)
+        edges = index_vergleich.fenster_edges(idx_charts, e.get("markt"), e["datum"], rets,
+                                              pick_chart=charts[sym], ticker=sym)
         for h, r in rets.items():
             if r is None:
                 continue
