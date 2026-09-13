@@ -173,31 +173,39 @@ def evaluate():
     idx_charts = index_vergleich.lade_index_charts(
         kursdaten.hole_chart_cached, cache, heute_str)
     einzelfaelle = []
-    aktuell = {}
+    charts = {}
     for e in lb:
         try:
             tage = (heute_dt - datetime.strptime(e["datum"], "%Y-%m-%d").date()).days
         except Exception:
             continue
-        bk = _bucket(tage)
-        if not bk or e.get("kategorie") not in eimer:
+        if e.get("kategorie") not in eimer:
             continue
         sym = e.get("ticker")
-        if sym not in aktuell:
-            aktuell[sym] = _preis(sym, cache, heute_str)
-        kurs = aktuell[sym]
-        if not kurs or not e.get("preis_signal"):
+        if sym not in charts:
+            charts[sym] = kursdaten.hole_chart_cached(sym, cache, heute_str) or {}
+        # Feste Fenster (seit 2026-09-13, Systempruefung Punkt 2), siehe
+        # index_vergleich.fenster_returns: Signalkurs gegen den Schlusskurs genau
+        # 21/50/78 Kalendertage spaeter. Die Episode zaehlt in jedem erreichten
+        # Horizont; bk/ret meinen den laengsten davon (Einzelfall-Liste).
+        rets = index_vergleich.fenster_returns(charts[sym], e["datum"], e.get("preis_signal"))
+        bk, ret = index_vergleich.laengster_horizont(rets)
+        if bk is None:
             continue
-        ret = kurs / e["preis_signal"] - 1
-        eimer[e["kategorie"]][bk].append(ret)
-        edge = index_vergleich.edge_fuer(idx_charts, e.get("markt"), e["datum"], tage, ret)
-        if edge is not None:
-            eimer_edge[e["kategorie"]][bk].append(edge)
+        edges = index_vergleich.fenster_edges(idx_charts, e.get("markt"), e["datum"], rets)
+        for h, r in rets.items():
+            if r is None:
+                continue
+            eimer[e["kategorie"]][h].append(r)
+            if edges[h] is not None:
+                eimer_edge[e["kategorie"]][h].append(edges[h])
+        edge = edges[bk]
         einzelfaelle.append({
             "ticker": e["ticker"], "kategorie": e["kategorie"], "theme": e.get("theme"),
             "datum": e["datum"], "preis_signal": e["preis_signal"],
             "horizont": bk, "return_pct": round(ret * 100, 2),
             "edge_idx_pct": round(edge * 100, 2) if edge is not None else None,
+            "fenster": {h: round(r * 100, 2) for h, r in rets.items() if r is not None},
         })
     kursdaten.speichere_cache(cache)
     fr = {k: {h: index_vergleich.ergaenze_edge(_stats(eimer[k][h]), eimer_edge[k][h])
@@ -238,12 +246,13 @@ def log_und_evaluate():
     fr, einzelfaelle = evaluate()
     out = {
         "erstellt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "hinweis": ("Forward-Test: Kurs am Signaltag (top_rs_etf: RS-Rating >= 80, "
-                    "leader: Leader-Aktie im staerksten Thema, resilient: Rote-Tage-"
-                    "Resilienz-Kandidat) vs. aktueller Kurs, Kohorten nach Alter "
-                    "(>=21/50/78 Kalendertage). Unverzerrt (Einstufung stand vor dem "
-                    "Ergebnis fest). Absoluter Return, kein Index-Vergleich (siehe "
-                    "Docstring in rotation_backtest.py)."),
+        "hinweis": ("Forward-Test mit festen Fenstern (seit 2026-09-13): Kurs am Signaltag "
+                    "(top_rs_etf: RS-Rating >= 80, leader: Leader-Aktie im staerksten Thema, "
+                    "resilient: Rote-Tage-Resilienz-Kandidat) vs. Schlusskurs genau 21/50/78 "
+                    "Kalendertage spaeter; eine Episode zaehlt in jedem erreichten Horizont, "
+                    "ihr Wert bleibt danach fest. Unverzerrt (Einstufung stand vor dem "
+                    "Ergebnis fest). Mit Index-Vergleich gegen ^GSPC ueber dasselbe Fenster "
+                    "(seit 2026-09-12)."),
         "forward_realisiert": fr,
         "forward_einzelfaelle": einzelfaelle,
     }
