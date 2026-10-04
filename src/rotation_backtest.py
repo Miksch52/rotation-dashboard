@@ -40,6 +40,7 @@ import kursdaten
 HORIZONTE = [("4W", 21), ("8W", 50), ("12W", 78)]   # Mindest-KALENDERtage je Kohorte
 KATEGORIEN = ("top_rs_etf", "leader", "resilient")
 RS_SCHWELLE = 80   # IBD/Minervini-Konvention: RS-Rating >= 80 gilt als fuehrend
+DUBLETTEN = 0      # vom letzten evaluate() herausgefilterte Dubletten (seit 2026-10-04)
 
 
 def _stats(rets):
@@ -92,51 +93,50 @@ def log_heute():
     daten = json.load(open(pfade.ROTATION_JSON, encoding="utf-8"))
     heute = datetime.now().strftime("%Y-%m-%d")
     lb = _logbuch_load()
-    bekannt = {(e["datum"], e["ticker"], e["kategorie"]) for e in lb}
+    # Doppel-Pruefung ueber den belegten Handelstag statt das Schreibdatum
+    # (seit 2026-10-04, siehe index_vergleich.logbuch_schluessel): Sa-, So- und
+    # Mo-Lauf sehen dieselben Freitagskurse und legen damit nur EINEN Eintrag an.
+    bekannt = {index_vergleich.logbuch_schluessel(e, "ticker", "kategorie") for e in lb}
     cache = kursdaten.lade_cache()
+    idx_charts = index_vergleich.lade_index_charts(kursdaten.hole_chart_cached, cache, heute)
     neu = 0
+
+    def anhaengen(ticker, kategorie, preis, quelle):
+        nonlocal neu
+        eintrag = {"datum": heute, "ticker": ticker, "kategorie": kategorie}
+        ht = index_vergleich.handelstag_fuer(idx_charts, None, ticker)
+        if ht:
+            eintrag["handelstag"] = ht
+        key = index_vergleich.logbuch_schluessel(eintrag, "ticker", "kategorie")
+        if key in bekannt:
+            return
+        preis = preis() if callable(preis) else preis
+        if not preis:
+            return
+        eintrag.update({"theme": quelle.get("theme"), "rs": quelle.get("rs"),
+                        "preis_signal": preis})
+        lb.append(eintrag)
+        bekannt.add(key)
+        neu += 1
 
     for s in daten.get("sectors", []):
         ticker = s.get("etf")
         if not ticker or s.get("rs") is None or s["rs"] < RS_SCHWELLE:
             continue
-        key = (heute, ticker, "top_rs_etf")
-        if key in bekannt:
-            continue
-        preis = _preis(ticker, cache, heute)
-        if not preis:
-            continue
-        lb.append({"datum": heute, "ticker": ticker, "kategorie": "top_rs_etf",
-                    "theme": s.get("theme"), "rs": s.get("rs"), "preis_signal": preis})
-        neu += 1
+        anhaengen(ticker, "top_rs_etf", lambda t=ticker: _preis(t, cache, heute), s)
 
     for l in daten.get("leaders", []):
         ticker = l.get("ticker")
         if not ticker:
             continue
-        key = (heute, ticker, "leader")
-        if key in bekannt:
-            continue
-        preis = l.get("price") or _preis(ticker, cache, heute)
-        if not preis:
-            continue
-        lb.append({"datum": heute, "ticker": ticker, "kategorie": "leader",
-                    "theme": l.get("theme"), "rs": l.get("rs"), "preis_signal": preis})
-        neu += 1
+        anhaengen(ticker, "leader",
+                  lambda t=ticker, l=l: l.get("price") or _preis(t, cache, heute), l)
 
     for r in daten.get("resilient", []):
         ticker = r.get("ticker")
         if not ticker:
             continue
-        key = (heute, ticker, "resilient")
-        if key in bekannt:
-            continue
-        preis = _preis(ticker, cache, heute)
-        if not preis:
-            continue
-        lb.append({"datum": heute, "ticker": ticker, "kategorie": "resilient",
-                    "theme": r.get("theme"), "rs": r.get("rs"), "preis_signal": preis})
-        neu += 1
+        anhaengen(ticker, "resilient", lambda t=ticker: _preis(t, cache, heute), r)
 
     kursdaten.speichere_cache(cache)
     # Aufbewahrung nach ALTER statt nach Eintragszahl (seit 2026-09-13). Die
@@ -175,6 +175,12 @@ def evaluate():
         kursdaten.hole_chart_cached, cache, heute_str)
     einzelfaelle = []
     charts = {}
+    # Dubletten-Filter (seit 2026-10-04, siehe index_vergleich.ist_dublette):
+    # eine Episode je (Ticker, Kategorie, Startbar) - Sa/So/Mo bzw. Feiertag +
+    # Folgetag zaehlten vorher mehrfach mit identischem Ergebnis.
+    global DUBLETTEN
+    DUBLETTEN = 0
+    gesehen = set()
     for e in lb:
         try:
             tage = (heute_dt - datetime.strptime(e["datum"], "%Y-%m-%d").date()).days
@@ -189,11 +195,15 @@ def evaluate():
         # index_vergleich.fenster_returns: Signalkurs gegen den Schlusskurs genau
         # 21/50/78 Kalendertage spaeter. Die Episode zaehlt in jedem erreichten
         # Horizont; bk/ret meinen den laengsten davon (Einzelfall-Liste).
-        rets = index_vergleich.fenster_returns(charts[sym], e["datum"], e.get("preis_signal"))
+        start = index_vergleich.start_datum(e)
+        rets = index_vergleich.fenster_returns(charts[sym], start, e.get("preis_signal"))
         bk, ret = index_vergleich.laengster_horizont(rets)
         if bk is None:
             continue
-        edges = index_vergleich.fenster_edges(idx_charts, e.get("markt"), e["datum"], rets,
+        if index_vergleich.ist_dublette(gesehen, charts[sym], start, sym, e["kategorie"]):
+            DUBLETTEN += 1
+            continue
+        edges = index_vergleich.fenster_edges(idx_charts, e.get("markt"), start, rets,
                                               pick_chart=charts[sym], ticker=sym)
         for h, r in rets.items():
             if r is None:
@@ -204,7 +214,8 @@ def evaluate():
         edge = edges[bk]
         einzelfaelle.append({
             "ticker": e["ticker"], "kategorie": e["kategorie"], "theme": e.get("theme"),
-            "datum": e["datum"], "preis_signal": e["preis_signal"],
+            "datum": e["datum"], "handelstag": e.get("handelstag"),
+            "preis_signal": e["preis_signal"],
             "horizont": bk, "return_pct": round(ret * 100, 2),
             "edge_idx_pct": round(edge * 100, 2) if edge is not None else None,
             "fenster": {h: round(r * 100, 2) for h, r in rets.items() if r is not None},
@@ -254,14 +265,19 @@ def log_und_evaluate():
                     "Kalendertage spaeter; eine Episode zaehlt in jedem erreichten Horizont, "
                     "ihr Wert bleibt danach fest. Unverzerrt (Einstufung stand vor dem "
                     "Ergebnis fest). Mit Index-Vergleich gegen ^GSPC ueber dasselbe Fenster "
-                    "(seit 2026-09-12)."),
+                    "(seit 2026-09-12). Je Ticker, Kategorie und Starttag zaehlt nur eine "
+                    "Episode (seit 2026-10-04: Sa/So/Mo bzw. Feiertag + Folgetag waren "
+                    "vorher Dubletten)."),
         "forward_realisiert": fr,
         "forward_einzelfaelle": einzelfaelle,
+        "dubletten_gefiltert": DUBLETTEN,
     }
     _schreibe(out)
     if einzelfaelle:
         print(f"\n=== Rotation-Dashboard Forward-Test ({len(einzelfaelle)} gereifte Einzelfaelle) ===")
         _druck_tabelle(fr)
+    if DUBLETTEN:
+        print(f"Dubletten herausgefiltert (gleicher Starttag): {DUBLETTEN}")
     print(f"Gespeichert: {pfade.ROTATION_BACKTEST}")
     return fr, einzelfaelle
 
